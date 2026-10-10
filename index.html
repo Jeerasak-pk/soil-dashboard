@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soil Monitoring Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Paho MQTT WebSocket Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Prompt', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-6">
+
+    <!-- Header Section -->
+    <header class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+        <div class="flex items-center space-x-3 mb-4 md:mb-0">
+            <i data-lucide="sprout" class="w-8 h-8 text-emerald-400"></i>
+            <div>
+                <h1 class="text-xl font-bold text-white">Soil Monitoring Dashboard</h1>
+                <p class="text-xs text-slate-400">ระบบติดตามและบันทึกสภาพดินแบบ Real-time</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-3">
+            <span id="mqttStatus" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span class="w-2 h-2 mr-2 rounded-full bg-amber-400 animate-pulse"></span> Connecting...
+            </span>
+            <button onclick="toggleConfigModal()" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Top Action Buttons -->
+        <div class="flex flex-wrap gap-3 justify-end">
+            <button onclick="triggerMeasure()" class="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>สั่งวัดค่าใหม่</span>
+            </button>
+            <button onclick="triggerReset()" class="flex items-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span>Soft Reset ESP32</span>
+            </button>
+        </div>
+
+        <!-- 4 Metric Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Soil Moisture Card -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 relative overflow-hidden shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">ความชื้นในดิน</p>
+                        <h2 id="soilVal" class="text-3xl font-bold text-emerald-400 mt-2">-- %</h2>
+                    </div>
+                    <div class="p-3 bg-emerald-500/10 rounded-lg text-emerald-400">
+                        <i data-lucide="droplets" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="mt-4 w-full bg-slate-700 rounded-full h-2">
+                    <div id="soilBar" class="bg-emerald-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Temperature Card -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 relative overflow-hidden shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">อุณหภูมิอากาศ</p>
+                        <h2 id="tempVal" class="text-3xl font-bold text-amber-400 mt-2">-- °C</h2>
+                    </div>
+                    <div class="p-3 bg-amber-500/10 rounded-lg text-amber-400">
+                        <i data-lucide="thermometer" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="mt-4 w-full bg-slate-700 rounded-full h-2">
+                    <div id="tempBar" class="bg-amber-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Air Humidity Card -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 relative overflow-hidden shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">ความชื้นอากาศ</p>
+                        <h2 id="humVal" class="text-3xl font-bold text-sky-400 mt-2">-- %</h2>
+                    </div>
+                    <div class="p-3 bg-sky-500/10 rounded-lg text-sky-400">
+                        <i data-lucide="wind" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="mt-4 w-full bg-slate-700 rounded-full h-2">
+                    <div id="humBar" class="bg-sky-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Light Lux Card -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 relative overflow-hidden shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium">ความสว่างแสง</p>
+                        <h2 id="luxVal" class="text-3xl font-bold text-yellow-400 mt-2">-- Lux</h2>
+                    </div>
+                    <div class="p-3 bg-yellow-500/10 rounded-lg text-yellow-400">
+                        <i data-lucide="sun" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="mt-4 w-full bg-slate-700 rounded-full h-2">
+                    <div id="luxBar" class="bg-yellow-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Chart -->
+        <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+            <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center space-x-2">
+                <i data-lucide="line-chart" class="w-4 h-4 text-emerald-400"></i>
+                <span>แนวโน้มค่าความชื้นดินและอุณหภูมิ</span>
+            </h3>
+            <div class="h-64">
+                <canvas id="sensorChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Log Table with Timestamp -->
+        <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h3 class="text-sm font-semibold text-slate-300 flex items-center space-x-2">
+                    <i data-lucide="table" class="w-4 h-4 text-emerald-400"></i>
+                    <span>ตารางประวัติบันทึกข้อมูล (Timestamped Logs)</span>
+                </h3>
+                <button onclick="exportCSV()" class="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    <span>Export CSV</span>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
+                        <tr>
+                            <th class="p-3 rounded-l-lg">เวลาประทับ (Timestamp)</th>
+                            <th class="p-3">ความชื้นดิน (%)</th>
+                            <th class="p-3">อุณหภูมิ (°C)</th>
+                            <th class="p-3">ความชื้นอากาศ (%)</th>
+                            <th class="p-3 rounded-r-lg">แสง (Lux)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="5" class="text-center py-6 text-slate-500">ยังไม่มีข้อมูลส่งเข้ามา...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center space-x-2">
+                <i data-lucide="sliders" class="w-5 h-5 text-emerald-400"></i>
+                <span>ตั้งค่า MQTT Connection</span>
+            </h3>
+            <div class="space-y-4 text-sm">
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">MQTT WebSocket Host</label>
+                    <input type="text" id="cfgHost" value="mqtt.thaiappify.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">WebSocket Port</label>
+                    <input type="number" id="cfgPort" value="8083" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Subscribe Topic (Data)</label>
+                    <input type="text" id="cfgTopic" value="sensor/data" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="toggleConfigModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300">ยกเลิก</button>
+                <button onclick="saveConfig()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium">บันทึกและเชื่อมต่อ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        lucide.createIcons();
+
+        // Application State
+        let client = null;
+        let sensorLogs = [];
+        let sensorChart = null;
+
+        // Config Default Values
+        let config = {
+            host: localStorage.getItem('mqtt_host') || 'mqtt.thaiappify.com',
+            port: parseInt(localStorage.getItem('mqtt_port')) || 8083,
+            topic: localStorage.getItem('mqtt_topic') || 'sensor/data'
+        };
+
+        // Initialize App
+        window.onload = function() {
+            initChart();
+            connectMQTT();
+        };
+
+        function initChart() {
+            const ctx = document.getElementById('sensorChart').getContext('2d');
+            sensorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'ความชื้นดิน (%)',
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            data: [],
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'อุณหภูมิ (°C)',
+                            borderColor: '#f59e0b',
+                            data: [],
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                }
+            });
+        }
+
+        function connectMQTT() {
+            updateStatus('Connecting...', 'amber');
+            const clientId = 'web_dashboard_' + Math.random().toString(16).substr(2, 8);
+            client = new Paho.MQTT.Client(config.host, Number(config.port), clientId);
+
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: onFailure,
+                useSSL: config.port === 8084 || config.port === 443
+            });
+        }
+
+        function onConnect() {
+            updateStatus('Connected', 'emerald');
+            client.subscribe(config.topic);
+        }
+
+        function onFailure(err) {
+            updateStatus('Connection Failed', 'rose');
+            console.error('MQTT Error:', err);
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                updateStatus('Disconnected', 'rose');
+                setTimeout(connectMQTT, 5000); // Auto reconnect
+            }
+        }
+
+        function onMessageArrived(message) {
+            try {
+                const data = JSON.parse(message.payloadString);
+                
+                // 1. Generate Thai Timestamp
+                const now = new Date();
+                const timestamp = now.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + 
+                                  now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                // 2. Update Metric Displays
+                document.getElementById('soilVal').innerText = (data.soil ?? '--') + ' %';
+                document.getElementById('tempVal').innerText = (data.temp ?? '--') + ' °C';
+                document.getElementById('humVal').innerText = (data.hum ?? '--') + ' %';
+                document.getElementById('luxVal').innerText = (data.lux ?? '--') + ' Lux';
+
+                document.getElementById('soilBar').style.width = Math.min(100, Math.max(0, data.soil || 0)) + '%';
+                document.getElementById('tempBar').style.width = Math.min(100, Math.max(0, (data.temp / 50) * 100)) + '%';
+                document.getElementById('humBar').style.width = Math.min(100, Math.max(0, data.hum || 0)) + '%';
+                document.getElementById('luxBar').style.width = Math.min(100, Math.max(0, (data.lux / 50000) * 100)) + '%';
+
+                // 3. Store Log Entry
+                const logEntry = {
+                    timestamp: timestamp,
+                    soil: data.soil ?? 0,
+                    temp: data.temp ?? 0,
+                    hum: data.hum ?? 0,
+                    lux: data.lux ?? 0
+                };
+                sensorLogs.unshift(logEntry);
+                if (sensorLogs.length > 50) sensorLogs.pop(); // Keep max 50 entries
+
+                // 4. Update Table
+                renderTable();
+
+                // 5. Update Chart
+                updateChart(timestamp, data.soil, data.temp);
+
+            } catch (e) {
+                console.error('JSON Parse Error:', e);
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('logTableBody');
+            tbody.innerHTML = sensorLogs.map(log => `
+                <tr class="hover:bg-slate-700/30 transition">
+                    <td class="p-3 font-mono text-xs text-slate-400">${log.timestamp}</td>
+                    <td class="p-3 font-semibold text-emerald-400">${log.soil} %</td>
+                    <td class="p-3 text-amber-400">${log.temp} °C</td>
+                    <td class="p-3 text-sky-400">${log.hum} %</td>
+                    <td class="p-3 text-yellow-400">${log.lux} Lux</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateChart(label, soil, temp) {
+            sensorChart.data.labels.push(label.split(' ')[1]); // Only show time part
+            sensorChart.data.datasets[0].data.push(soil);
+            sensorChart.data.datasets[1].data.push(temp);
+
+            if (sensorChart.data.labels.length > 15) {
+                sensorChart.data.labels.shift();
+                sensorChart.data.datasets[0].data.shift();
+                sensorChart.data.datasets[1].data.shift();
+            }
+            sensorChart.update();
+        }
+
+        function triggerMeasure() {
+            if (client && client.isConnected()) {
+                const message = new Paho.MQTT.Message('MEASURE');
+                message.destinationName = 'sensor/cmd';
+                client.send(message);
+                alert('ส่งคำสั่งวัดค่าเรียบร้อยแล้ว');
+            }
+        }
+
+        function triggerReset() {
+            if (confirm('ยืนยันที่จะสั่ง Soft Reset ESP32 หรือไม่?')) {
+                if (client && client.isConnected()) {
+                    const message = new Paho.MQTT.Message('RESET');
+                    message.destinationName = 'sensor/cmd';
+                    client.send(message);
+                    alert('ส่งคำสั่ง Reset เรียบร้อยแล้ว');
+                }
+            }
+        }
+
+        function exportCSV() {
+            if (sensorLogs.length === 0) {
+                alert('ไม่มีข้อมูลให้ Export');
+                return;
+            }
+            let csv = 'Timestamp,Soil_Moisture(%),Temperature(C),Humidity(%),Light(Lux)\n';
+            sensorLogs.forEach(row => {
+                csv += `"${row.timestamp}",${row.soil},${row.temp},${row.hum},${row.lux}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `soil_data_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        }
+
+        function updateStatus(text, color) {
+            const badge = document.getElementById('mqttStatus');
+            const bgClass = `bg-${color}-500/10`;
+            const textClass = `text-${color}-400`;
+            const borderClass = `border-${color}-500/20`;
+            badge.className = `inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${bgClass} ${textClass} border ${borderClass}`;
+            badge.innerHTML = `<span class="w-2 h-2 mr-2 rounded-full bg-${color}-400"></span> ${text}`;
+        }
+
+        function toggleConfigModal() {
+            const modal = document.getElementById('configModal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        function saveConfig() {
+            config.host = document.getElementById('cfgHost').value;
+            config.port = parseInt(document.getElementById('cfgPort').value);
+            config.topic = document.getElementById('cfgTopic').value;
+
+            localStorage.setItem('mqtt_host', config.host);
+            localStorage.setItem('mqtt_port', config.port);
+            localStorage.setItem('mqtt_topic', config.topic);
+
+            toggleConfigModal();
+            if (client) client.disconnect();
+            connectMQTT();
+        }
+    </script>
+</body>
+</html>

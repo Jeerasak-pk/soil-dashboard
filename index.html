@@ -204,11 +204,11 @@
         let sensorChart = null;
 
         // Config Default Values
-        let config = {
-            host: localStorage.getItem('mqtt_host') || 'mqtt.thaiappify.com',
-            port: parseInt(localStorage.getItem('mqtt_port')) || 8083,
-            topic: localStorage.getItem('mqtt_topic') || 'sensor/data'
-        };
+let config = {
+    host: localStorage.getItem('mqtt_host') || '172.22.43.129',
+    port: parseInt(localStorage.getItem('mqtt_port')) || 1880,
+    topic: localStorage.getItem('mqtt_topic') || '/ws/sensors'
+};
 
         // Initialize App
         window.onload = function() {

@@ -252,19 +252,34 @@
         }
 
         function connectMQTT() {
-            updateStatus('Connecting...', 'amber');
-            const clientId = 'web_dashboard_' + Math.random().toString(16).substr(2, 8);
-            client = new Paho.MQTT.Client(config.host, Number(config.port), clientId);
+    updateStatus('Connecting...', 'amber');
+    
+    // ดึง IP และ Port จาก Modal ตั้งค่า ( Default คือ IP เครื่องคุณ และ Port 1880 )
+    const host = config.host || '172.22.43.129';
+    const port = config.port || 1880;
+    
+    // เชื่อมต่อผ่าน WebSocket ของ Node-RED
+    const wsUrl = `ws://${host}:${port}/ws/sensors`;
+    const socket = new WebSocket(wsUrl);
 
-            client.onConnectionLost = onConnectionLost;
-            client.onMessageArrived = onMessageArrived;
+    socket.onopen = function() {
+        updateStatus('Connected', 'emerald');
+    };
 
-            client.connect({
-                onSuccess: onConnect,
-                onFailure: onFailure,
-                useSSL: config.port === 8084 || config.port === 443
-            });
-        }
+    socket.onerror = function(err) {
+        updateStatus('Connection Failed', 'rose');
+        console.error('WebSocket Error:', err);
+    };
+
+    socket.onclose = function() {
+        updateStatus('Disconnected', 'rose');
+        setTimeout(connectMQTT, 5000); // ลองเชื่อมต่อใหม่ทุก 5 วิ
+    };
+
+    socket.onmessage = function(event) {
+        onMessageArrived({ payloadString: event.data });
+    };
+}
 
         function onConnect() {
             updateStatus('Connected', 'emerald');

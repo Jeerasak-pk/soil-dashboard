@@ -42,17 +42,7 @@
     <!-- Main Container -->
     <main class="max-w-7xl mx-auto space-y-6">
 
-        <!-- Top Action Buttons -->
-        <div class="flex flex-wrap gap-3 justify-end">
-            <button onclick="triggerMeasure()" class="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md">
-                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                <span>สั่งวัดค่าใหม่</span>
-            </button>
-            <button onclick="triggerReset()" class="flex items-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md">
-                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                <span>Soft Reset ESP32</span>
-            </button>
-        </div>
+       
 
         <!-- 4 Metric Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -370,26 +360,7 @@
             sensorChart.update();
         }
 
-        function triggerMeasure() {
-            if (client && client.isConnected()) {
-                const message = new Paho.MQTT.Message('MEASURE');
-                message.destinationName = 'sensor/cmd';
-                client.send(message);
-                alert('ส่งคำสั่งวัดค่าเรียบร้อยแล้ว');
-            }
-        }
-
-        function triggerReset() {
-            if (confirm('ยืนยันที่จะสั่ง Soft Reset ESP32 หรือไม่?')) {
-                if (client && client.isConnected()) {
-                    const message = new Paho.MQTT.Message('RESET');
-                    message.destinationName = 'sensor/cmd';
-                    client.send(message);
-                    alert('ส่งคำสั่ง Reset เรียบร้อยแล้ว');
-                }
-            }
-        }
-
+        
         function exportCSV() {
             if (sensorLogs.length === 0) {
                 alert('ไม่มีข้อมูลให้ Export');

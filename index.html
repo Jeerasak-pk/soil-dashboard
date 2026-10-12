@@ -338,20 +338,24 @@
         }
 
         function exportCSV() {
-            if (sensorLogs.length === 0) {
-                alert('ไม่มีข้อมูลให้ Export');
-                return;
-            }
-            let csv = 'Timestamp,Soil_Moisture,Temperature,Humidity,Light\n';
-            sensorLogs.forEach(row => {
-                csv += `"${row.timestamp}","${row.soil}","${row.temp}","${row.hum}","${row.lux}"\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `soil_data_${new Date().toISOString().slice(0,10)}.csv`;
-            link.click();
-        }
+    if (sensorLogs.length === 0) {
+        alert('ไม่มีข้อมูลให้ Export');
+        return;
+    }
+    
+    // เติม '\ufeff' ไว้หน้าสุด เพื่อให้ Excel อ่านภาษาไทย / สัญลักษณ์พิเศษถูกต้อง 100%
+    let csv = '\ufeffTimestamp,Soil_Moisture,Temperature,Humidity,Light\n';
+    
+    sensorLogs.forEach(row => {
+        csv += `"${row.timestamp}","${row.soil}","${row.temp}","${row.hum}","${row.lux}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `soil_data_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+}
 
         function updateStatus(text, color) {
             const badge = document.getElementById('mqttStatus');
